@@ -1,0 +1,11 @@
+ipykernel
+openpyxl
+Pillow
+pywin32
+PyPDF2
+pandas
+JPype1
+pdfquery
+mysql-connector-python
+python-dotenv
+deep_translator
