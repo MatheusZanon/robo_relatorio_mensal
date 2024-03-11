@@ -6,7 +6,8 @@ economia_mensal,
 economia_formal,
 total_fatura,
 mes, 
-ano
+ano,
+relatorio_enviado
 FROM clientes_financeiro_valores WHERE 
 cliente_id = %s AND ano = %s
 ORDER BY mes

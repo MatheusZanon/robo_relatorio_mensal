@@ -217,6 +217,7 @@ def envia_email():
         for arquivo in arquivos:
             if arquivo.__contains__(".pdf"):
                 anexos.append(arquivo)
+                print(anexos)
                 input("Pressione ENTER para enviar o e-mail")
                 enviar_email_com_anexos(emails_formatado, "Relatório de Redução de Custos Trabalhistas Mensal - Grupo Dentistas do Norte", corpo_email, anexos)
         if anexos == []:
@@ -227,8 +228,9 @@ def envia_email():
 def relatorio_economia_geral_mensal():
     try:
         workbook_emails, sheet_emails, style_moeda_emails = carrega_excel(f"{particao}:\\Meu Drive\\Arquivos_Automacao\\emails para envio relatorio human.xlsx")
-        cliente_emails = []
+        cliente_emails = ["victor.pena@acpcontabil.com.br", "mzblannes@outlook.com"]
         corpo_email = os.getenv('CORPO_EMAIL_02')
+        relatorio_enviado = False
         for row in sheet_emails.iter_rows(min_row=1, max_row=12, min_col=1, max_col=2):
             cliente = procura_cliente(row[0].value, db_conf)
             if cliente:
@@ -238,56 +240,74 @@ def relatorio_economia_geral_mensal():
                 valores = procura_todos_valores_ano(cliente_id, db_conf, ano)
                 if valores:
                     valores.reverse()
-                    pasta_cliente = procura_pasta_cliente(cliente_nome, lista_dir_clientes)
-                    if pasta_cliente:
-                        pasta_economia_mensal = Path(f"{pasta_cliente}\\Economia Mensal\\{ano}")
-                        caminho_arquivo_excel = f"{pasta_economia_mensal}\\Economia_Mensal_{cliente_nome}_{ano}.xlsx"
-                        copy(dir_economia_mensal_modelo, pasta_economia_mensal / f"Economia_Mensal_{cliente_nome}_{ano}.xlsx")
-                        sleep(0.5)
-                        workbook_economia, sheet_economia, style_moeda_economia = carrega_excel(caminho_arquivo_excel)
-                        sheet_economia[f'C1'] = f"Relatorio demonstrativo de economia previdenciaria {ano}"
-                        sheet_economia[f'C2'] = cliente_nome
-                        for indice, valor in enumerate(valores):
-                            sheet_economia['C4'].style = style_moeda_economia
-                            sheet_economia['A4'].border = Border(top=Side(style='thin'), bottom=Side(style='thin'), left=Side(style='thin'))
-                            sheet_economia['B4'].border = Border(top=Side(style='thin'), bottom=Side(style='thin'))
-                            sheet_economia['C4'].border = Border(top=Side(style='thin'), bottom=Side(style='thin'))
-                            sheet_economia['D4'].border = Border(top=Side(style='thin'), bottom=Side(style='thin'), left=Side(style='thin'))
-                            sheet_economia['E4'].border = Border(top=Side(style='thin'), bottom=Side(style='thin'), right=Side(style='thin'))
-                            mes_valor = calendar.month_name[int(valor[6])].capitalize()
-                            sheet_economia['A4'] = f"{mes_valor}/{ano}"
-                            sheet_economia['D4'] = valor[3]
-                            if not indice == len(valores) - 1:
-                                sheet_economia.insert_rows(4)
-                                print(f"Elemento atual: {valor}")
-                            else:
-                                print(f"Último elemento: {valor}")
-                        for row in sheet_economia.iter_rows(min_row=1, min_col=1, max_col=5):
-                            if row[0].value == "Total economia/ano":
-                                sheet_economia[f'D{row[0].row}'] = f"=SUM(D4:D{row[0].row - 1})"
-                        workbook_economia.save(caminho_arquivo_excel)
-                        workbook_economia.close()
-                        try:
-                            excel = win32.gencache.EnsureDispatch('Excel.Application')
-                            excel.Visible = True
-                            wb = excel.Workbooks.Open(caminho_arquivo_excel)
-                            ws = wb.Worksheets[f"Página1"]
-                            sleep(3)
-                            ws.ExportAsFixedFormat(0, f"{pasta_economia_mensal}" + f"\\Economia_Mensal_{cliente_nome}_{ano}")
-                            wb.Close()
-                            excel.Quit()
-                            print("Relatório Gerado!")
-                        except Exception as error:
-                            print(error)
-                        sleep(0.5)
-                        caminho_arquivo_pdf = [f"{pasta_economia_mensal}\\Economia_Mensal_{cliente_nome}_{ano}.pdf"]
-                        enviar_email_com_anexos(cliente_emails, f"Relatório demonstrativo de economia previdenciaria {ano}", corpo_email, caminho_arquivo_pdf)
+                    for valor in valores:
+                        if valor[6] == int(mes) and valor[7] == int(ano) and valor[8] == 1:
+                            relatorio_enviado = True
+                            break
+                        else:
+                            relatorio_enviado = False
+                    print(cliente_emails)
+                    if relatorio_enviado == False:
+                        pasta_cliente = procura_pasta_cliente(cliente_nome, lista_dir_clientes)
+                        if pasta_cliente:
+                            pasta_economia_mensal = Path(f"{pasta_cliente}\\Economia Mensal\\{ano}")
+                            caminho_arquivo_excel = f"{pasta_economia_mensal}\\Economia_Mensal_{cliente_nome}_{ano}.xlsx"
+                            copy(dir_economia_mensal_modelo, pasta_economia_mensal / f"Economia_Mensal_{cliente_nome}_{ano}.xlsx")
+                            sleep(0.5)
+                            workbook_economia, sheet_economia, style_moeda_economia = carrega_excel(caminho_arquivo_excel)
+                            sheet_economia[f'C1'] = f"Relatorio demonstrativo de economia previdenciaria {ano}"
+                            sheet_economia[f'C2'] = cliente_nome
+                            for indice, valor in enumerate(valores):
+                                sheet_economia['C4'].style = style_moeda_economia
+                                sheet_economia['A4'].border = Border(top=Side(style='thin'), bottom=Side(style='thin'), left=Side(style='thin'))
+                                sheet_economia['B4'].border = Border(top=Side(style='thin'), bottom=Side(style='thin'))
+                                sheet_economia['C4'].border = Border(top=Side(style='thin'), bottom=Side(style='thin'))
+                                sheet_economia['D4'].border = Border(top=Side(style='thin'), bottom=Side(style='thin'), left=Side(style='thin'))
+                                sheet_economia['E4'].border = Border(top=Side(style='thin'), bottom=Side(style='thin'), right=Side(style='thin'))
+                                mes_valor = calendar.month_name[int(valor[6])].capitalize()
+                                sheet_economia['A4'] = f"{mes_valor}/{ano}"
+                                sheet_economia['D4'] = valor[3]
+                                if not indice == len(valores) - 1:
+                                    sheet_economia.insert_rows(4)
+                                    print(f"Elemento atual: {valor}")
+                                else:
+                                    print(f"Último elemento: {valor}")
+                            for row in sheet_economia.iter_rows(min_row=1, min_col=1, max_col=5):
+                                if row[0].value == "Total economia/ano":
+                                    sheet_economia[f'D{row[0].row}'] = f"=SUM(D4:D{row[0].row - 1})"
+                            workbook_economia.save(caminho_arquivo_excel)
+                            workbook_economia.close()
+                            try:
+                                excel = win32.gencache.EnsureDispatch('Excel.Application')
+                                excel.Visible = True
+                                wb = excel.Workbooks.Open(caminho_arquivo_excel)
+                                ws = wb.Worksheets[f"Página1"]
+                                sleep(3)
+                                ws.ExportAsFixedFormat(0, f"{pasta_economia_mensal}" + f"\\Economia_Mensal_{cliente_nome}_{ano}")
+                                wb.Close()
+                                excel.Quit()
+                                print("Relatório Gerado!")
+                            except Exception as error:
+                                print(error)
+                            sleep(0.5)
+                            caminho_arquivo_pdf = [f"{pasta_economia_mensal}\\Economia_Mensal_{cliente_nome}_{ano}.pdf"]
+                            sleep(0.5)
+                            enviar_email_com_anexos(cliente_emails, f"Relatório demonstrativo de economia previdenciaria {ano}", corpo_email, caminho_arquivo_pdf)
+                            query_atualiza_relatorios = ler_sql("sql/atualiza_relatorios_cliente.sql")
+                            values_relatorio = (cliente_id, mes, ano)
+                            with mysql.connector.connect(**db_conf) as conn, conn.cursor() as cursor:
+                                cursor.execute(query_atualiza_relatorios, values_relatorio)
+                                conn.commit()
+                        else:
+                            print("Pasta do cliente não encontrada")
                     else:
-                        print("Pasta do cliente não encontrada")
+                        print(f"Relatório ja foi enviado para {cliente_nome}!")
                 else:
                     print("Nenhum registro de valor encontrado para o cliente")
             else:
                 print("Nenhum cliente encontrado")
+            cliente_emails = []
+            cliente_emails = ["victor.pena@acpcontabil.com.br"]
         workbook_emails.close()
     except Exception as error:
         print(error)
