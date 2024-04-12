@@ -228,7 +228,7 @@ def envia_email():
 def relatorio_economia_geral_mensal():
     try:
         workbook_emails, sheet_emails, style_moeda_emails = carrega_excel(f"{particao}:\\Meu Drive\\Arquivos_Automacao\\emails para envio relatorio human.xlsx")
-        cliente_emails = ["victor.pena@acpcontabil.com.br", "mzblannes@outlook.com"]
+        cliente_emails = ["victor.pena@acpcontabil.com.br"]
         corpo_email = os.getenv('CORPO_EMAIL_02')
         relatorio_enviado = False
         for row in sheet_emails.iter_rows(min_row=1, max_row=12, min_col=1, max_col=2):
@@ -292,6 +292,7 @@ def relatorio_economia_geral_mensal():
                             sleep(0.5)
                             caminho_arquivo_pdf = [f"{pasta_economia_mensal}\\Economia_Mensal_{cliente_nome}_{ano}.pdf"]
                             sleep(0.5)
+                            input("Pressione ENTER para enviar o e-mail")
                             enviar_email_com_anexos(cliente_emails, f"Relatório demonstrativo de economia previdenciaria {ano}", corpo_email, caminho_arquivo_pdf)
                             query_atualiza_relatorios = ler_sql("sql/atualiza_relatorios_cliente.sql")
                             values_relatorio = (cliente_id, mes, ano)
