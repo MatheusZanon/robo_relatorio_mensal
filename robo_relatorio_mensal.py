@@ -24,7 +24,7 @@ locale.setlocale(locale.LC_ALL, 'pt_BR.utf8')
 load_dotenv()
 
 # =====================CONFIGURAÇÂO DO BANCO DE DADOS======================
-db_conf, conn, cursor = configura_db()
+db_conf = configura_db()
 
 # =============CHECANDO SE O GOOGLE FILE STREAM ESTÁ INICIADO NO SISTEMA==============
 checa_google_drive()
