@@ -19,6 +19,8 @@ from time import sleep
 import locale
 import calendar
 import pandas as pd
+from flask import Flask, request
+from flask_restful import Resource, Api, reqparse
 
 locale.setlocale(locale.LC_ALL, 'pt_BR.utf8')
 load_dotenv()
@@ -29,28 +31,6 @@ db_conf = configura_db()
 # =============CHECANDO SE O GOOGLE FILE STREAM ESTÁ INICIADO NO SISTEMA==============
 checa_google_drive()
 
-def main():
-    root = tk.Tk()
-    app = DialogBox(root)
-    root.mainloop()
-    return app.particao, app.rotina, app.mes, app.ano
-
-
-if __name__ == "__main__":
-    particao, rotina, mes, ano = main()
-
-mes_nome = calendar.month_name[int(mes)].capitalize()
-
-# ========================ARQUIVOS INICIAS==============================
-dir_clientes_itaperuna = f"{particao}:\\Meu Drive\\Cobranca_Clientes_terceirizacao\\Clientes Itaperuna"
-dir_clientes_manaus = f"{particao}:\\Meu Drive\\Cobranca_Clientes_terceirizacao\\Clientes Manaus"
-lista_dir_clientes = [dir_clientes_itaperuna, dir_clientes_manaus]
-dir_relatorio_926 = f"{particao}:\\Meu Drive\\Relatorio_Human_9.26_Direitos_Trabalhistas\\{ano}\\Relatório {ano} Human - 9,26_ Direitos Trabalhistas.xlsx"
-dir_relatorio_taxa_adm = f"{particao}:\\Meu Drive\\Relatorio_Taxa_Administracao\\{ano}\\Taxa Administração {ano} Human.xlsx"
-dir_relatorio_economia_manaus = f"{particao}:\\Meu Drive\\Relatorio_Economia_Mensal_Manaus\\{ano}\\Relatorio Economia Mensal Manaus {ano}.xlsx"
-dir_dentistas_norte_modelo = Path(f"{particao}:\\Meu Drive\\Arquivos_Automacao\\Dentistas_Norte_Modelo_00_0000_python.xlsx")
-dir_dentistas_norte_destino = Path(f"{particao}:\\Meu Drive\\Relatorio_Dentista_do_Norte\\{mes}-{ano}")
-dir_economia_mensal_modelo = Path(f"{particao}:\\Meu Drive\\Arquivos_Automacao\\modelo relatorio demonstrativo economia previdencia.xlsx")
 
 # ==================== MÉTODOS DE AUXÍLIO====================================
 def busca_excel(row, mes):
@@ -75,7 +55,7 @@ def busca_excel(row, mes):
         print(error)
 
 # ==================== MÉTODOS DE CADA ETAPA DO PROCESSO=======================
-def relatorio_926():
+def relatorio_926(mes, ano, dir_relatorio_926):
     try:
         workbook, sheet, style_moeda = carrega_excel(dir_relatorio_926)
         for row in sheet.iter_rows(min_row=4, max_row=61, min_col=3, max_col=14):
@@ -96,7 +76,7 @@ def relatorio_926():
     except Exception as error:
         print(error)
 
-def relatorio_taxa_adm():
+def relatorio_taxa_adm(mes, ano, dir_relatorio_taxa_adm):
     try:
         workbook, sheet, style_moeda = carrega_excel(dir_relatorio_taxa_adm)
 
@@ -118,7 +98,7 @@ def relatorio_taxa_adm():
     except Exception as error:
         print(error)
 
-def relatorio_economia_manaus():
+def relatorio_economia_manaus(mes, ano, dir_relatorio_economia_manaus):
     try:
         workbook, sheet, style_moeda = carrega_excel(dir_relatorio_economia_manaus)
 
@@ -147,7 +127,7 @@ def relatorio_economia_manaus():
     except Exception as error:
         print(error)
 
-def gera_relatorio_dentistas_norte():
+def gera_relatorio_dentistas_norte(mes, mes_nome, ano, dir_dentistas_norte_modelo, dir_dentistas_norte_destino):
     try:
         dentistas_norte = procura_clientes_por_regiao("Manaus", db_conf)
         dentistas_norte.reverse()
@@ -205,7 +185,7 @@ def gera_relatorio_dentistas_norte():
     except Exception as error:
         print(error)
 
-def envia_email():
+def envia_email(dir_dentistas_norte_destino):
     try:
         emails_clientes = os.getenv('EMAILS_CLIENTES').split(",")
         corpo_email = os.getenv('CORPO_EMAIL_01')
@@ -225,11 +205,12 @@ def envia_email():
     except Exception as error:
         print(error)
 
-def relatorio_economia_geral_mensal():
+def relatorio_economia_geral_mensal(mes, ano, particao, lista_dir_clientes, dir_economia_mensal_modelo):
     try:
         workbook_emails, sheet_emails, style_moeda_emails = carrega_excel(f"{particao}:\\Meu Drive\\Arquivos_Automacao\\emails para envio relatorio human.xlsx")
-        cliente_emails = ["victor.pena@acpcontabil.com.br"]
+        ceo_email = os.getenv('CEO_EMAIL')
         corpo_email = os.getenv('CORPO_EMAIL_02')
+        cliente_emails = [ceo_email]
         relatorio_enviado = False
         for row in sheet_emails.iter_rows(min_row=1, max_row=12, min_col=1, max_col=2):
             cliente = procura_cliente(row[0].value, db_conf)
@@ -308,38 +289,94 @@ def relatorio_economia_geral_mensal():
             else:
                 print("Nenhum cliente encontrado")
             cliente_emails = []
-            cliente_emails = ["victor.pena@acpcontabil.com.br"]
+            cliente_emails = [ceo_email]
         workbook_emails.close()
     except Exception as error:
         print(error)
 
-# ========================LÓGICA DE EXECUÇÃO DO ROBÔ===========================
-if rotina == "1. Relatorio 9.26%":
-    relatorio_926()
-    relatorio_taxa_adm()
-    relatorio_economia_manaus()
-    gera_relatorio_dentistas_norte()
-    envia_email()
-    relatorio_economia_geral_mensal()
-elif rotina == "2. Relatorio de Taxa ADM":
-    relatorio_taxa_adm()
-    relatorio_economia_manaus()
-    gera_relatorio_dentistas_norte()
-    envia_email()
-    relatorio_economia_geral_mensal()
-elif rotina == "3. Relatório Economia de Manaus":
-    relatorio_economia_manaus()
-    gera_relatorio_dentistas_norte()
-    envia_email()
-    relatorio_economia_geral_mensal()
-elif rotina == "4. Gerar Relatório Dentista do Norte":
-    gera_relatorio_dentistas_norte()
-    envia_email()
-    relatorio_economia_geral_mensal()
-elif rotina == "5. Enviar Email":
-    envia_email()
-    relatorio_economia_geral_mensal()
-elif rotina == "6. Relatorio Economia Geral Mensal":
-    relatorio_economia_geral_mensal()
-else:
-    print("Nenhuma rotina selecionada, encerrando o robô...")
+
+app = Flask(__name__)
+api = Api(app)
+
+class execute(Resource):
+  def post(self):
+    print("Requisição Recebida!")
+    parser = reqparse.RequestParser()
+    parser.add_argument('mes', type=int, required=True)
+    parser.add_argument('ano', type=int, required=True)
+    parser.add_argument('particao', required=True)
+    parser.add_argument('rotina', required=True)
+    json = parser.parse_args()
+
+    print(json)
+    input("Pressione ENTER para continuar")
+    mes = json['mes']
+    ano = json['ano']
+    particao = json['particao']
+    rotina = json['rotina']
+
+    # ========================PARAMETROS INICIAS==============================
+    dir_clientes_itaperuna = f"{particao}:\\Meu Drive\\Cobranca_Clientes_terceirizacao\\Clientes Itaperuna"
+    dir_clientes_manaus = f"{particao}:\\Meu Drive\\Cobranca_Clientes_terceirizacao\\Clientes Manaus"
+    lista_dir_clientes = [dir_clientes_itaperuna, dir_clientes_manaus]
+    dir_relatorio_926 = f"{particao}:\\Meu Drive\\Relatorio_Human_9.26_Direitos_Trabalhistas\\{ano}\\Relatório {ano} Human - 9,26_ Direitos Trabalhistas.xlsx"
+    dir_relatorio_taxa_adm = f"{particao}:\\Meu Drive\\Relatorio_Taxa_Administracao\\{ano}\\Taxa Administração {ano} Human.xlsx"
+    dir_relatorio_economia_manaus = f"{particao}:\\Meu Drive\\Relatorio_Economia_Mensal_Manaus\\{ano}\\Relatorio Economia Mensal Manaus {ano}.xlsx"
+    dir_dentistas_norte_modelo = Path(f"{particao}:\\Meu Drive\\Arquivos_Automacao\\Dentistas_Norte_Modelo_00_0000_python.xlsx")
+    dir_dentistas_norte_destino = Path(f"{particao}:\\Meu Drive\\Relatorio_Dentista_do_Norte\\{mes}-{ano}")
+    dir_economia_mensal_modelo = Path(f"{particao}:\\Meu Drive\\Arquivos_Automacao\\modelo relatorio demonstrativo economia previdencia.xlsx")
+    mes_nome = calendar.month_name[int(mes)].capitalize()
+    sucesso = False
+
+    # ========================LÓGICA DE EXECUÇÃO DO ROBÔ===========================
+    if rotina == "1. Relatorio 9.26%":
+        relatorio_926(mes, ano, dir_relatorio_926)
+        relatorio_taxa_adm(mes, ano, dir_relatorio_taxa_adm)
+        relatorio_economia_manaus(mes, ano, dir_relatorio_economia_manaus)
+        gera_relatorio_dentistas_norte(mes, mes_nome, ano, dir_dentistas_norte_modelo, dir_dentistas_norte_destino)
+        envia_email(dir_dentistas_norte_destino)
+        relatorio_economia_geral_mensal(mes, ano, particao, lista_dir_clientes, dir_economia_mensal_modelo)
+        sucesso = True
+    elif rotina == "2. Relatorio de Taxa ADM":
+        relatorio_taxa_adm(mes, ano, dir_relatorio_taxa_adm)
+        relatorio_economia_manaus(mes, ano, dir_relatorio_economia_manaus)
+        gera_relatorio_dentistas_norte(mes, mes_nome, ano, dir_dentistas_norte_modelo, dir_dentistas_norte_destino)
+        envia_email(dir_dentistas_norte_destino)
+        relatorio_economia_geral_mensal(mes, ano, particao, lista_dir_clientes, dir_economia_mensal_modelo)
+        sucesso = True
+    elif rotina == "3. Relatório Economia de Manaus":
+        relatorio_economia_manaus(mes, ano, dir_relatorio_economia_manaus)
+        gera_relatorio_dentistas_norte(mes, mes_nome, ano, dir_dentistas_norte_modelo, dir_dentistas_norte_destino)
+        envia_email(dir_dentistas_norte_destino)
+        relatorio_economia_geral_mensal(mes, ano, particao, lista_dir_clientes, dir_economia_mensal_modelo)
+        sucesso = True
+    elif rotina == "4. Gerar Relatório Dentista do Norte":
+        gera_relatorio_dentistas_norte(mes, mes_nome, ano, dir_dentistas_norte_modelo, dir_dentistas_norte_destino)
+        envia_email(dir_dentistas_norte_destino)
+        relatorio_economia_geral_mensal(mes, ano, particao, lista_dir_clientes, dir_economia_mensal_modelo)
+        sucesso = True
+    elif rotina == "5. Enviar Email":
+        envia_email(dir_dentistas_norte_destino)
+        relatorio_economia_geral_mensal(mes, ano, particao, lista_dir_clientes, dir_economia_mensal_modelo)
+        sucesso = True
+    elif rotina == "6. Relatorio Economia Geral Mensal":
+        relatorio_economia_geral_mensal(mes, ano, particao, lista_dir_clientes, dir_economia_mensal_modelo)
+        sucesso = True
+    else:
+        print("Nenhuma rotina selecionada, encerrando o robô...")
+        sucesso = False
+
+    if sucesso:
+      return {'message': 'Relatórios gerados com sucesso'}, 200
+    else:
+      return {'message': 'Erro ao gerar relatórios'}, 500
+
+class shutdown(Resource):
+  def post(self):
+    os._exit(0)
+
+api.add_resource(execute, '/')
+api.add_resource(shutdown, '/shutdown')
+
+if __name__ == "__main__":
+  app.run(debug=True, port=5000)
