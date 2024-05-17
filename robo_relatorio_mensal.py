@@ -18,6 +18,7 @@ import os
 from time import sleep
 import locale
 import calendar
+import pythoncom
 import pandas as pd
 from flask import Flask, request
 from flask_restful import Resource, Api, reqparse
@@ -129,6 +130,7 @@ def relatorio_economia_manaus(mes, ano, dir_relatorio_economia_manaus):
 
 def gera_relatorio_dentistas_norte(mes, mes_nome, ano, dir_dentistas_norte_modelo, dir_dentistas_norte_destino):
     try:
+        pythoncom.CoInitialize()
         dentistas_norte = procura_clientes_por_regiao("Manaus", db_conf)
         dentistas_norte.reverse()
         linha = 3
@@ -184,6 +186,8 @@ def gera_relatorio_dentistas_norte(mes, mes_nome, ano, dir_dentistas_norte_model
                 print(error)
     except Exception as error:
         print(error)
+    finally:
+        pythoncom.CoUninitialize()
 
 def envia_email(dir_dentistas_norte_destino):
     try:
@@ -207,6 +211,7 @@ def envia_email(dir_dentistas_norte_destino):
 
 def relatorio_economia_geral_mensal(mes, ano, particao, lista_dir_clientes, dir_economia_mensal_modelo):
     try:
+        pythoncom.CoInitialize()
         workbook_emails, sheet_emails, style_moeda_emails = carrega_excel(f"{particao}:\\Meu Drive\\Arquivos_Automacao\\emails para envio relatorio human.xlsx")
         ceo_email = os.getenv('CEO_EMAIL')
         corpo_email = os.getenv('CORPO_EMAIL_02')
@@ -273,7 +278,6 @@ def relatorio_economia_geral_mensal(mes, ano, particao, lista_dir_clientes, dir_
                             sleep(0.5)
                             caminho_arquivo_pdf = [f"{pasta_economia_mensal}\\Economia_Mensal_{cliente_nome}_{ano}.pdf"]
                             sleep(0.5)
-                            input("Pressione ENTER para enviar o e-mail")
                             enviar_email_com_anexos(cliente_emails, f"Relatório demonstrativo de economia previdenciaria {ano}", corpo_email, caminho_arquivo_pdf)
                             query_atualiza_relatorios = ler_sql("sql/atualiza_relatorios_cliente.sql")
                             values_relatorio = (cliente_id, mes, ano)
@@ -293,6 +297,8 @@ def relatorio_economia_geral_mensal(mes, ano, particao, lista_dir_clientes, dir_
         workbook_emails.close()
     except Exception as error:
         print(error)
+    finally:
+        pythoncom.CoUninitialize()
 
 
 app = Flask(__name__)
@@ -309,7 +315,7 @@ class execute(Resource):
     json = parser.parse_args()
 
     print(json)
-    input("Pressione ENTER para continuar")
+    sleep(2)
     mes = json['mes']
     ano = json['ano']
     particao = json['particao']
@@ -344,13 +350,13 @@ class execute(Resource):
         envia_email(dir_dentistas_norte_destino)
         relatorio_economia_geral_mensal(mes, ano, particao, lista_dir_clientes, dir_economia_mensal_modelo)
         sucesso = True
-    elif rotina == "3. Relatório Economia de Manaus":
+    elif rotina == "3. Relatorio Economia de Manaus":
         relatorio_economia_manaus(mes, ano, dir_relatorio_economia_manaus)
         gera_relatorio_dentistas_norte(mes, mes_nome, ano, dir_dentistas_norte_modelo, dir_dentistas_norte_destino)
         envia_email(dir_dentistas_norte_destino)
         relatorio_economia_geral_mensal(mes, ano, particao, lista_dir_clientes, dir_economia_mensal_modelo)
         sucesso = True
-    elif rotina == "4. Gerar Relatório Dentista do Norte":
+    elif rotina == "4. Gerar Relatorio Dentista do Norte":
         gera_relatorio_dentistas_norte(mes, mes_nome, ano, dir_dentistas_norte_modelo, dir_dentistas_norte_destino)
         envia_email(dir_dentistas_norte_destino)
         relatorio_economia_geral_mensal(mes, ano, particao, lista_dir_clientes, dir_economia_mensal_modelo)
@@ -367,13 +373,16 @@ class execute(Resource):
         sucesso = False
 
     if sucesso:
-      return {'message': 'Relatórios gerados com sucesso'}, 200
+      return {'message': 'Relatorios gerados com sucesso'}, 200
     else:
-      return {'message': 'Erro ao gerar relatórios'}, 500
+      return {'message': 'Erro ao gerar relatorios'}, 500
 
 class shutdown(Resource):
   def post(self):
-    os._exit(0)
+    try:
+        os._exit(0)
+    except Exception as e:
+        print(f'Erro ao executar o comando de shutdown: {e}')
 
 api.add_resource(execute, '/')
 api.add_resource(shutdown, '/shutdown')
