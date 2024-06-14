@@ -56,78 +56,6 @@ def busca_excel(row, mes):
         print(error)
 
 # ==================== MÉTODOS DE CADA ETAPA DO PROCESSO=======================
-def relatorio_926(mes, ano, dir_relatorio_926):
-    try:
-        workbook, sheet, style_moeda = carrega_excel(dir_relatorio_926)
-        for row in sheet.iter_rows(min_row=4, max_row=61, min_col=3, max_col=14):
-            cliente = procura_cliente(row[0].value, db_conf)
-            if cliente:
-                cliente_id = cliente[0]
-                valores = procura_valores(cliente_id, db_conf, mes, ano)
-                if valores:
-                    providencia_dt = round(valores[1] * 0.0926, 2)
-                    celula_atualizar = busca_excel(row, mes)
-                    sheet[celula_atualizar] = providencia_dt
-                else:
-                    print("Nenhum registro de valor encontrado para o cliente")
-            else:
-                print("Nenhum cliente encontrado")
-        workbook.save(dir_relatorio_926)
-        workbook.close()
-    except Exception as error:
-        print(error)
-
-def relatorio_taxa_adm(mes, ano, dir_relatorio_taxa_adm):
-    try:
-        workbook, sheet, style_moeda = carrega_excel(dir_relatorio_taxa_adm)
-
-        for row in sheet.iter_rows(min_row=4, max_row=61, min_col=3, max_col=14):
-            cliente = procura_cliente(row[0].value, db_conf)
-            if cliente:
-                cliente_id = cliente[0]
-                valores = procura_valores(cliente_id, db_conf, mes, ano)
-                if valores:
-                    percentual_human = valores[2]
-                    celula_atualizar = busca_excel(row, mes)
-                    sheet[celula_atualizar] = percentual_human
-                else:
-                    print("Nenhum registro de valor encontrado para o cliente")
-            else:
-                print("Nenhum cliente encontrado")
-        workbook.save(dir_relatorio_taxa_adm)
-        workbook.close()
-    except Exception as error:
-        print(error)
-
-def relatorio_economia_manaus(mes, ano, dir_relatorio_economia_manaus):
-    try:
-        workbook, sheet, style_moeda = carrega_excel(dir_relatorio_economia_manaus)
-
-        for row in sheet.iter_rows(min_row=5, max_row=44, min_col=3, max_col=14):
-            print(row[0].value)
-            cliente = procura_cliente(row[0].value, db_conf)
-            if cliente:
-                print(cliente)
-                cliente_id = cliente[0]
-                valores = procura_valores(cliente_id, db_conf, mes, ano)
-                if valores:
-                    economia_formal = round(valores[3] - valores[2], 2)
-                    celula_atualizar = busca_excel(row, mes)
-                    sheet[celula_atualizar] = economia_formal
-                    query_economia_formal = ler_sql('sql/registra_economia_formal.sql')
-                    values = (economia_formal, cliente_id)
-                    with mysql.connector.connect(**db_conf) as conn, conn.cursor() as cursor:
-                        cursor.execute(query_economia_formal, values)
-                        conn.commit()
-                else:
-                    print("Nenhum registro de valor encontrado para o cliente")
-            else:
-                print("Nenhum cliente encontrado")
-        workbook.save(dir_relatorio_economia_manaus)
-        workbook.close()
-    except Exception as error:
-        print(error)
-
 def gera_relatorio_dentistas_norte(mes, mes_nome, ano, dir_dentistas_norte_modelo, dir_dentistas_norte_destino):
     try:
         pythoncom.CoInitialize()
@@ -335,37 +263,16 @@ class execute(Resource):
     sucesso = False
 
     # ========================LÓGICA DE EXECUÇÃO DO ROBÔ===========================
-    if rotina == "1. Relatorio 9.26%":
-        relatorio_926(mes, ano, dir_relatorio_926)
-        relatorio_taxa_adm(mes, ano, dir_relatorio_taxa_adm)
-        relatorio_economia_manaus(mes, ano, dir_relatorio_economia_manaus)
+    if rotina == "1. Gerar Relatorio Dentista do Norte":
         gera_relatorio_dentistas_norte(mes, mes_nome, ano, dir_dentistas_norte_modelo, dir_dentistas_norte_destino)
         envia_email(dir_dentistas_norte_destino)
         relatorio_economia_geral_mensal(mes, ano, particao, lista_dir_clientes, dir_economia_mensal_modelo)
         sucesso = True
-    elif rotina == "2. Relatorio de Taxa ADM":
-        relatorio_taxa_adm(mes, ano, dir_relatorio_taxa_adm)
-        relatorio_economia_manaus(mes, ano, dir_relatorio_economia_manaus)
-        gera_relatorio_dentistas_norte(mes, mes_nome, ano, dir_dentistas_norte_modelo, dir_dentistas_norte_destino)
+    elif rotina == "2. Enviar Email":
         envia_email(dir_dentistas_norte_destino)
         relatorio_economia_geral_mensal(mes, ano, particao, lista_dir_clientes, dir_economia_mensal_modelo)
         sucesso = True
-    elif rotina == "3. Relatorio Economia de Manaus":
-        relatorio_economia_manaus(mes, ano, dir_relatorio_economia_manaus)
-        gera_relatorio_dentistas_norte(mes, mes_nome, ano, dir_dentistas_norte_modelo, dir_dentistas_norte_destino)
-        envia_email(dir_dentistas_norte_destino)
-        relatorio_economia_geral_mensal(mes, ano, particao, lista_dir_clientes, dir_economia_mensal_modelo)
-        sucesso = True
-    elif rotina == "4. Gerar Relatorio Dentista do Norte":
-        gera_relatorio_dentistas_norte(mes, mes_nome, ano, dir_dentistas_norte_modelo, dir_dentistas_norte_destino)
-        envia_email(dir_dentistas_norte_destino)
-        relatorio_economia_geral_mensal(mes, ano, particao, lista_dir_clientes, dir_economia_mensal_modelo)
-        sucesso = True
-    elif rotina == "5. Enviar Email":
-        envia_email(dir_dentistas_norte_destino)
-        relatorio_economia_geral_mensal(mes, ano, particao, lista_dir_clientes, dir_economia_mensal_modelo)
-        sucesso = True
-    elif rotina == "6. Relatorio Economia Geral Mensal":
+    elif rotina == "3. Relatorio Economia Geral Mensal":
         relatorio_economia_geral_mensal(mes, ano, particao, lista_dir_clientes, dir_economia_mensal_modelo)
         sucesso = True
     else:
