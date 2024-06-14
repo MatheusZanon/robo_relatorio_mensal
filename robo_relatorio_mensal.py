@@ -32,29 +32,6 @@ db_conf = configura_db()
 # =============CHECANDO SE O GOOGLE FILE STREAM ESTÁ INICIADO NO SISTEMA==============
 checa_google_drive()
 
-
-# ==================== MÉTODOS DE AUXÍLIO====================================
-def busca_excel(row, mes):
-    try:
-        linha = row[0].row
-        coluna_atualizar = ("D" if int(mes) == 1 
-                            else "E" if int(mes) == 2 
-                            else "F" if int(mes) == 3 
-                            else "G" if int(mes) == 4
-                            else "H" if int(mes) == 5
-                            else "I" if int(mes) == 6
-                            else "J" if int(mes) == 7
-                            else "K" if int(mes) == 8
-                            else "L" if int(mes) == 9
-                            else "M" if int(mes) == 10
-                            else "N" if int(mes) == 11
-                            else "O" if int(mes) == 12
-                            else "")  
-        celula_atualizar = f"{coluna_atualizar}{linha}"
-        return celula_atualizar
-    except Exception as error:
-        print(error)
-
 # ==================== MÉTODOS DE CADA ETAPA DO PROCESSO=======================
 def gera_relatorio_dentistas_norte(mes, mes_nome, ano, dir_dentistas_norte_modelo, dir_dentistas_norte_destino):
     try:
@@ -253,9 +230,6 @@ class execute(Resource):
     dir_clientes_itaperuna = f"{particao}:\\Meu Drive\\Cobranca_Clientes_terceirizacao\\Clientes Itaperuna"
     dir_clientes_manaus = f"{particao}:\\Meu Drive\\Cobranca_Clientes_terceirizacao\\Clientes Manaus"
     lista_dir_clientes = [dir_clientes_itaperuna, dir_clientes_manaus]
-    dir_relatorio_926 = f"{particao}:\\Meu Drive\\Relatorio_Human_9.26_Direitos_Trabalhistas\\{ano}\\Relatório {ano} Human - 9,26_ Direitos Trabalhistas.xlsx"
-    dir_relatorio_taxa_adm = f"{particao}:\\Meu Drive\\Relatorio_Taxa_Administracao\\{ano}\\Taxa Administração {ano} Human.xlsx"
-    dir_relatorio_economia_manaus = f"{particao}:\\Meu Drive\\Relatorio_Economia_Mensal_Manaus\\{ano}\\Relatorio Economia Mensal Manaus {ano}.xlsx"
     dir_dentistas_norte_modelo = Path(f"{particao}:\\Meu Drive\\Arquivos_Automacao\\Dentistas_Norte_Modelo_00_0000_python.xlsx")
     dir_dentistas_norte_destino = Path(f"{particao}:\\Meu Drive\\Relatorio_Dentista_do_Norte\\{mes}-{ano}")
     dir_economia_mensal_modelo = Path(f"{particao}:\\Meu Drive\\Arquivos_Automacao\\modelo relatorio demonstrativo economia previdencia.xlsx")
