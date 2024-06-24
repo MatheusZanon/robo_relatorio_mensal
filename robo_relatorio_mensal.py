@@ -106,8 +106,6 @@ def envia_email(dir_dentistas_norte_destino):
         for arquivo in arquivos:
             if arquivo.__contains__(".pdf"):
                 anexos.append(arquivo)
-                print(anexos)
-                input("Pressione ENTER para enviar o e-mail")
                 enviar_email_com_anexos(emails_formatado, "Relatório de Redução de Custos Trabalhistas Mensal - Grupo Dentistas do Norte", corpo_email, anexos)
         if anexos == []:
             print("Relatório não foi encontrado")
@@ -137,7 +135,7 @@ def relatorio_economia_geral_mensal(mes, ano, particao, lista_dir_clientes, dir_
                             break
                         else:
                             relatorio_enviado = False
-                    print(cliente_emails)
+
                     if relatorio_enviado == False:
                         pasta_cliente = procura_pasta_cliente(cliente_nome, lista_dir_clientes)
                         if pasta_cliente:
@@ -160,9 +158,6 @@ def relatorio_economia_geral_mensal(mes, ano, particao, lista_dir_clientes, dir_
                                 sheet_economia['D4'] = valor[3]
                                 if not indice == len(valores) - 1:
                                     sheet_economia.insert_rows(4)
-                                    print(f"Elemento atual: {valor}")
-                                else:
-                                    print(f"Último elemento: {valor}")
                             for row in sheet_economia.iter_rows(min_row=1, min_col=1, max_col=5):
                                 if row[0].value == "Total economia/ano":
                                     sheet_economia[f'D{row[0].row}'] = f"=SUM(D4:D{row[0].row - 1})"
@@ -218,8 +213,6 @@ class execute(Resource):
     parser.add_argument('particao', required=True)
     parser.add_argument('rotina', required=True)
     json = parser.parse_args()
-
-    print(json)
     sleep(2)
     mes = json['mes']
     ano = json['ano']
