@@ -7,6 +7,12 @@ from components.importacao_automacao_excel_openpyxl import carrega_excel
 from components.procura_cliente import procura_cliente, procura_clientes_por_regiao
 from components.procura_valores import procura_valores, procura_todos_valores_ano
 from components.enviar_emails import enviar_email_com_anexos
+from components.aws_parameters import get_ssm_parameter
+import boto3
+from botocore.exceptions import ClientError
+from google.auth.transport.requests import Request
+from google.auth import identity_pool
+from googleapiclient.discovery import build
 import mysql.connector
 import tkinter as tk
 from pathlib import Path
@@ -15,6 +21,7 @@ from shutil import copy
 import win32com.client as win32
 from dotenv import load_dotenv
 import os
+import json
 from time import sleep
 import locale
 import calendar
@@ -26,13 +33,80 @@ from flask_restful import Resource, Api, reqparse
 locale.setlocale(locale.LC_ALL, 'pt_BR.utf8')
 load_dotenv()
 
-# =====================CONFIGURAÇÂO DO BANCO DE DADOS======================
+# =====================CONFIGURAÇÂO DO BANCO DE DADOS===========================
 db_conf = configura_db()
 
-# =============CHECANDO SE O GOOGLE FILE STREAM ESTÁ INICIADO NO SISTEMA==============
+# =============CHECANDO SE O GOOGLE FILE STREAM ESTÁ INICIADO NO SISTEMA========
 checa_google_drive()
 
-# ==================== MÉTODOS DE CADA ETAPA DO PROCESSO=======================
+# ============= MÉTODOS AUXILIARES =============================================
+
+def get_secret():
+    secret_name = "GoogleFederationConfig"
+    region_name = "sa-east-1"
+
+    # Create a Secrets Manager client
+    session = boto3.session.Session()
+    client = session.client(
+        service_name='secretsmanager',
+        region_name=region_name
+    )
+    try:
+        get_secret_value_response = client.get_secret_value(
+            SecretId=secret_name
+        )
+    except ClientError as e:
+        # For a list of exceptions thrown, see
+        # https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_GetSecretValue.html
+        raise e
+
+    secret = get_secret_value_response['SecretString']
+    return json.loads(secret)
+
+def carregar_credenciais():
+    try:
+        secret_name = "GoogleFederationConfig"
+        secret_json = get_secret(secret_name)
+        
+        credentials = identity_pool.Credentials.from_info(secret_json)
+
+        SCOPES = [get_ssm_parameter('/human/API_SCOPES')]
+        credentials = credentials.with_scopes(SCOPES)
+
+        credentials.refresh(Request())
+        return credentials
+    except Exception as error:
+        print(error)
+
+def autenticacao_google_drive():
+    try:
+        service_name = get_ssm_parameter('/human/API_NAME')
+        service_version = get_ssm_parameter('/human/API_VERSION')
+        credentials = carregar_credenciais()
+        drive_service = build(service_name, service_version, credentials=credentials)
+        return drive_service
+    except Exception as error:
+        print(error)
+
+driver_service = autenticacao_google_drive()
+
+def lista_pastas_em_diretorio(folder_id):
+    try:
+        query = f"'{folder_id}' in parents and trashed=false"
+        results = driver_service.files().list(q=query, pageSize=80, fields="files(id, name)").execute()
+        items = results.get('files', [])
+        return items
+    except Exception as error:
+        print(error)
+
+def lista_pastas_subpastas_em_diretorio(folder_id):
+    try:
+        all_files = []
+        folders_to_process = [folder_id]
+    except Exception as error:
+        print(error)
+
+# ==================== MÉTODOS DE CADA ETAPA DO PROCESSO========================
 def gera_relatorio_dentistas_norte(mes, mes_nome, ano, dir_dentistas_norte_modelo, dir_dentistas_norte_destino):
     try:
         pythoncom.CoInitialize()
