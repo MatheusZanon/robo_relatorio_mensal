@@ -106,6 +106,192 @@ def lista_pastas_subpastas_em_diretorio(folder_id):
     except Exception as error:
         print(error)
 
+def procura_pasta_drive_por_nome(folder_name: str) -> list[dict] | None:
+    """
+    Procura pastas no Google Drive pelo nome fornecido.
+
+    Args:
+        folder_name (str): Nome da pasta a ser pesquisada. Caracteres '/' são tratados como separadores de diretórios e 
+                           "S/S" é substituído por "S S" para evitar problemas na pesquisa.
+
+    Returns:
+        list[dict]: Lista de dicionários contendo os dados das pastas encontradas. Cada dicionário inclui pelo menos as chaves 'id' e 'name'.
+        None: Caso nenhuma pasta seja encontrada.
+
+    Note:
+        - A função realiza uma busca pela pasta com o nome exato fornecido e retorna todas as pastas que correspondem ao nome especificado.
+        - Se várias pastas com o mesmo nome forem encontradas, todas serão retornadas na lista.
+
+    Examples:
+        1. Busca de uma pasta pelo nome:
+            >>> procura_pasta_drive_por_nome("Documentos")
+        # A pasta buscada será "Documentos".
+        
+        2. Busca de uma pasta com o nome incluindo separadores de diretórios:
+            >>> procura_pasta_drive_por_nome("Relatórios/2023")
+        # A pasta buscada será "Relatórios/2023".
+        
+        3. Caso especial onde "S/S" é convertido para "S S":
+            >>> procura_pasta_drive_por_nome("Empresa S/S/relatorios/2024")
+        # A pasta buscada será "Empresa S S/relatorios/2024".
+    """
+    try:
+        # Substitui "S/S" por "S S" e mantém a estrutura de diretórios com "/"
+        folder_name = folder_name.replace("S/S", "S S")
+        query = f"name = '{folder_name}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+        found_items = []
+        page_token = None
+        while True:
+            # Executa a busca e coleta os resultados
+            results = driver_service.files().list(
+                q=query, 
+                pageSize=80, 
+                fields="files(id, name), nextPageToken", 
+                pageToken=page_token
+            ).execute()
+            items = results.get('files', [])
+            found_items.extend(items)
+            page_token = results.get('nextPageToken')
+            if not page_token:
+                break
+
+        if not found_items:
+            print("Nenhuma pasta encontrada.")
+            return None
+
+        print("Pastas encontradas:")
+        for item in found_items:
+            print(f'{item["name"]} ({item["id"]})')
+        return found_items
+
+    except Exception as error:
+        print(f"Erro ao procurar pasta no Google Drive: {error}")
+        return None
+
+def procura_subpasta_drive_por_nome(parent_folder_name: str, subfolder_name: str, intermediate_folders: list[str] =None, recursive=False) -> list[dict] | None:
+    """
+    Procura uma subpasta no Google Drive pelo nome da pasta pai e nome da subpasta.
+    
+    Args:
+        parent_folder_name (str): Nome da pasta pai onde a busca começará. Caracteres '/' são tratados como separadores de diretórios.
+        subfolder_name (str): Nome da subpasta a ser pesquisada. Caracteres '/' são tratados como separadores de diretórios.
+        intermediate_folders (list of str, optional): Lista de nomes de diretórios intermediários a serem pesquisados sequencialmente antes da subpasta final. Cada nome deve corresponder a uma pasta que deve ser encontrada na ordem especificada. Caracteres '/' são tratados como separadores de diretórios.
+        recursive (bool, optional): Se verdadeiro, a busca será feita recursivamente em todas as subpastas, não apenas no nível atual.
+
+    Returns:
+        list[dict]: Lista de dicionários contendo os dados das subpastas encontradas. Cada dicionário inclui pelo menos as chaves 'id' e 'name'.
+        None: Caso nenhuma subpasta seja encontrada.
+
+    Note:
+        - Se `recursive` for verdadeiro, a função irá buscar a subpasta em todas as subpastas do diretório pai especificado ou da última pasta intermediária encontrada.
+        - Se `intermediate_folders` for fornecido, a função procurará cada pasta intermediária na ordem fornecida antes de buscar pela subpasta final. Caso algum diretório intermediário não seja encontrado, a função retorna `None`.
+
+    Examples:
+        1. Busca simples (diretório pai é diretamente pesquisado):
+            >>> procura_subpasta_drive_por_nome("Cliente", "2023")
+        # A função irá buscar na pasta "Cliente/2023".
+        
+        2. Busca com diretórios intermediários (procura na pasta 'Cliente', em seguida 'Economia Mensal', e finalmente 'Relatórios' para encontrar '2023'):
+            >>> procura_subpasta_drive_por_nome("Cliente", "2023", intermediate_folders=["Economia Mensal", "Relatórios"])
+        # A função irá buscar na estrutura "Cliente/Economia Mensal/Relatórios/2023".
+        
+        3. Busca recursiva (procura '2023' em todas as subpastas a partir da pasta 'Cliente'):
+            >>> procura_subpasta_drive_por_nome("Cliente", "2023", recursive=True)
+        # A função irá buscar recursivamente na estrutura "Cliente/*/2023".
+        
+        4. Busca com diretórios intermediários e recursiva (procura '2023' em 'Cliente', 'Economia Mensal', e subpastas):
+            >>> procura_subpasta_drive_por_nome("Cliente", "2023", intermediate_folders=["Economia Mensal"], recursive=True)
+        # A função irá buscar na estrutura "Cliente/Economia Mensal/*/2023".
+        
+        5. Busca em pastas com nome contendo "S/S" (o caractere '/' é tratado como separador de diretórios e "S/S" é substituído por "S S"):
+            >>> procura_subpasta_drive_por_nome("EMPRESA TESTE S/S", "2024/06/relatorios", intermediate_folders=["financeiro"])
+        # A função irá buscar na estrutura "EMPRESA TESTE S S/financeiro/2024/06/relatorios".
+    """
+    try:
+        # Substituir "S/S" por "S S" e tratar '/' como separadores de diretórios
+        parent_folder_name = parent_folder_name.replace("S/S", "S S")
+        subfolder_name = subfolder_name.replace("S/S", "S S")
+        if intermediate_folders:
+            intermediate_folders = [folder.replace("S/S", "S S") for folder in intermediate_folders]
+
+        # Função auxiliar para buscar a pasta pai
+        def find_parent_folder(parent_name):
+            parent_name_parts = parent_name.split("/")
+            parent_folder_id = None
+            for part in parent_name_parts:
+                query = f"name = '{part}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+                if parent_folder_id:
+                    query = f"'{parent_folder_id}' in parents and {query}"
+                results = driver_service.files().list(q=query, pageSize=80, fields="files(id, name)").execute()
+                items = results.get('files', [])
+                if not items:
+                    return None
+                parent_folder_id = items[0]['id']
+            return items[0]
+
+        # Primeiro, encontre a pasta pai pelo nome
+        parent_folder = find_parent_folder(parent_folder_name)
+        if not parent_folder:
+            print("Pasta pai não encontrada.")
+            return None
+
+        parent_folder_id = parent_folder['id']
+
+        # Se houver diretórios intermediários, procure dentro deles na sequência
+        if intermediate_folders:
+            for intermediate_folder_name in intermediate_folders:
+                query = f"'{parent_folder_id}' in parents and name = '{intermediate_folder_name}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+                results = driver_service.files().list(q=query, pageSize=80, fields="files(id, name)").execute()
+                items = results.get('files', [])
+                if not items:
+                    print(f"Diretório intermediário '{intermediate_folder_name}' não encontrado.")
+                    return None
+
+                intermediate_folder = items[0]
+                parent_folder_id = intermediate_folder['id']
+
+        # Se a busca for recursiva
+        if recursive:
+            # Função auxiliar para busca recursiva
+            def busca_recursiva(folder_id, subfolder_name):
+                found_items = []
+                page_token = None
+                while True:
+                    query = f"'{folder_id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+                    results = driver_service.files().list(
+                        q=query, pageSize=80, fields="files(id, name, parents)", pageToken=page_token
+                    ).execute()
+                    items = results.get('files', [])
+                    for item in items:
+                        if item['name'] == subfolder_name:
+                            found_items.append(item)
+                        # Busca recursiva nas subpastas
+                        found_items.extend(busca_recursiva(item['id'], subfolder_name))
+                    
+                    page_token = results.get('nextPageToken')
+                    if not page_token:
+                        break
+                return found_items
+
+            return busca_recursiva(parent_folder_id, subfolder_name)
+
+        # Caso não seja recursiva, procure a subpasta diretamente
+        query = f"'{parent_folder_id}' in parents and name = '{subfolder_name}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+        results = driver_service.files().list(q=query, pageSize=80, fields="files(id, name)").execute()
+        items = results.get('files', [])
+        if not items:
+            print("Nenhuma subpasta encontrada.")
+            return None
+
+        print("Subpastas encontradas:")
+        for item in items:
+            print(f'{item["name"]} ({item["id"]})')
+        return items  # Retorna todos os resultados encontrados
+
+    except Exception as error:
+        print(f"Erro ao procurar subpasta no Google Drive: {error}")
+        return None
+
 # ==================== MÉTODOS DE CADA ETAPA DO PROCESSO========================
 def gera_relatorio_dentistas_norte(mes, mes_nome, ano, dir_dentistas_norte_modelo, dir_dentistas_norte_destino):
     try:
@@ -189,7 +375,7 @@ def envia_email(dir_dentistas_norte_destino):
 def relatorio_economia_geral_mensal(mes, ano, particao, lista_dir_clientes, dir_economia_mensal_modelo):
     try:
         pythoncom.CoInitialize()
-        workbook_emails, sheet_emails, style_moeda_emails = carrega_excel(f"{particao}:\\Meu Drive\\Arquivos_Automacao\\emails para envio relatorio human.xlsx")
+        workbook_emails, sheet_emails, style_moeda_emails = carrega_excel(f"{particao}:\\Meu Drive\\Arquivos_Automacao\\emails para envio relatorio human.xlsx") # TODO: PRECISA DOS EMAILS DE CADA CLIENTE
         ceo_email = os.getenv('CEO_EMAIL')
         corpo_email = os.getenv('CORPO_EMAIL_02')
         cliente_emails = [ceo_email]
@@ -201,7 +387,7 @@ def relatorio_economia_geral_mensal(mes, ano, particao, lista_dir_clientes, dir_
                 cliente_nome = row[0].value
                 cliente_emails.append(row[1].value)
                 valores = procura_todos_valores_ano(cliente_id, db_conf, ano)
-                if valores:
+                if valores: # TODO: Ao invés de verificar somente se existem valores, verificar também se o cliente está ativo
                     valores.reverse()
                     for valor in valores:
                         if valor[6] == int(mes) and valor[7] == int(ano) and valor[8] == 1:
@@ -211,11 +397,18 @@ def relatorio_economia_geral_mensal(mes, ano, particao, lista_dir_clientes, dir_
                             relatorio_enviado = False
 
                     if relatorio_enviado == False:
-                        pasta_cliente = procura_pasta_cliente(cliente_nome, lista_dir_clientes)
+                        pasta_cliente = procura_pasta_drive_por_nome(cliente_nome)
+                        if pasta_cliente != None:
+                            pasta_cliente = pasta_cliente[0]
+                        
                         if pasta_cliente:
-                            pasta_economia_mensal = Path(f"{pasta_cliente}\\Economia Mensal\\{ano}")
-                            caminho_arquivo_excel = f"{pasta_economia_mensal}\\Economia_Mensal_{cliente_nome}_{ano}.xlsx"
-                            copy(dir_economia_mensal_modelo, pasta_economia_mensal / f"Economia_Mensal_{cliente_nome}_{ano}.xlsx")
+                            pasta_economia_mensal = procura_subpasta_drive_por_nome(cliente_nome, ano, ["Economia Mensal"])
+                            if pasta_economia_mensal != None:
+                                pasta_economia_mensal = pasta_economia_mensal[0]
+                            
+                            caminho_arquivo_excel = f"/tmp/Economia_Mensal_{cliente_nome}_{ano}.xlsx"
+                            
+                            copy(dir_economia_mensal_modelo, caminho_arquivo_excel)
                             sleep(0.5)
                             workbook_economia, sheet_economia, style_moeda_economia = carrega_excel(caminho_arquivo_excel)
                             sheet_economia[f'C1'] = f"Relatorio demonstrativo de economia previdenciaria {ano}"
@@ -275,31 +468,29 @@ def relatorio_economia_geral_mensal(mes, ano, particao, lista_dir_clientes, dir_
         pythoncom.CoUninitialize()
 
 
-app = Flask(__name__)
-api = Api(app)
-
-class execute(Resource):
-  def post(self):
-    print("Requisição Recebida!")
-    parser = reqparse.RequestParser()
-    parser.add_argument('mes', type=int, required=True)
-    parser.add_argument('ano', type=int, required=True)
-    parser.add_argument('particao', required=True)
-    parser.add_argument('rotina', required=True)
-    json = parser.parse_args()
+def lambda_handler(event, context):
+    # parse body da requisição
+    body = json.loads(event['body'])
     sleep(2)
-    mes = json['mes']
-    ano = json['ano']
-    particao = json['particao']
-    rotina = json['rotina']
+    mes = body['mes']
+    ano = body['ano']
+    particao = body['particao']
+    rotina = body['rotina']
 
     # ========================PARAMETROS INICIAS==============================
-    dir_clientes_itaperuna = f"{particao}:\\Meu Drive\\Cobranca_Clientes_terceirizacao\\Clientes Itaperuna"
-    dir_clientes_manaus = f"{particao}:\\Meu Drive\\Cobranca_Clientes_terceirizacao\\Clientes Manaus"
-    lista_dir_clientes = [dir_clientes_itaperuna, dir_clientes_manaus]
-    dir_dentistas_norte_modelo = Path(f"{particao}:\\Meu Drive\\Arquivos_Automacao\\Dentistas_Norte_Modelo_00_0000_python.xlsx")
-    dir_dentistas_norte_destino = Path(f"{particao}:\\Meu Drive\\Relatorio_Dentista_do_Norte\\{mes}-{ano}")
-    dir_economia_mensal_modelo = Path(f"{particao}:\\Meu Drive\\Arquivos_Automacao\\modelo relatorio demonstrativo economia previdencia.xlsx")
+    clientes_itaperuna_id = os.getenv('CLIENTES_ITAPERUNA_FOLDER_ID')
+    clientes_manaus_id = os.getenv('CLIENTES_MANAUS_FOLDER_ID')
+    dentista_norte_id = os.get_env('DENTISTAS_NORTE_FOLDER_ID') # TODO: TEM QUE SER CRIADO
+
+    arquivos_itaperuna = lista_pastas_em_diretorio(clientes_itaperuna_id)
+    arquivos_manaus = lista_pastas_em_diretorio(clientes_manaus_id)
+    arquivos_dentistas_norte = lista_pastas_em_diretorio(dentista_norte_id)
+
+    lista_dir_clientes = arquivos_itaperuna + arquivos_manaus
+
+    dir_dentistas_norte_destino = Path(f"{particao}:\\Meu Drive\\Relatorio_Dentista_do_Norte\\{mes}-{ano}") # TODO: TEM QUE DESCOBRIR COMO CHEGAR NESSE CAMINHO OU CRIAR CASO NÃO EXISTA
+    dir_dentistas_norte_modelo = Path(f"templates\\dentistas_norte_modelo_00_0000_python.xlsx") # TODO: TEM QUE MOVER PARA A PASTA TEMPLATES
+    dir_economia_mensal_modelo = Path(f"templates\\modelo_relatorio_demonstrativo_economia_previdencia.xlsx") # TODO: TEM QUE MOVER PARA A PASTA TEMPLATES
     mes_nome = calendar.month_name[int(mes)].capitalize()
     sucesso = False
 
@@ -324,16 +515,3 @@ class execute(Resource):
       return {'message': 'Relatorios gerados com sucesso'}, 200
     else:
       return {'message': 'Erro ao gerar relatorios'}, 500
-
-class shutdown(Resource):
-  def post(self):
-    try:
-        os._exit(0)
-    except Exception as e:
-        print(f'Erro ao executar o comando de shutdown: {e}')
-
-api.add_resource(execute, '/')
-api.add_resource(shutdown, '/shutdown')
-
-if __name__ == "__main__":
-  app.run(debug=True, port=5000)
