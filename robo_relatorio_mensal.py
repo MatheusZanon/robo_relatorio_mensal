@@ -7,12 +7,7 @@ from components.importacao_automacao_excel_openpyxl import carrega_excel
 from components.procura_cliente import procura_cliente, procura_clientes_por_regiao
 from components.procura_valores import procura_valores, procura_todos_valores_ano
 from components.enviar_emails import enviar_email_com_anexos
-from components.aws_parameters import get_ssm_parameter
-import boto3
-from botocore.exceptions import ClientError
-from google.auth.transport.requests import Request
-from google.auth import identity_pool
-from googleapiclient.discovery import build
+from components.google_drive import procura_subpasta_drive_por_nome, lista_pastas_em_diretorio, procura_pasta_drive_por_nome
 import mysql.connector
 import tkinter as tk
 from pathlib import Path
@@ -131,8 +126,9 @@ def relatorio_economia_geral_mensal(mes, ano, particao, lista_dir_clientes, dir_
                 cliente_id = cliente[0]
                 cliente_nome = row[0].value
                 cliente_emails.append(row[1].value)
+                cliente_ativo = cliente[7]
                 valores = procura_todos_valores_ano(cliente_id, db_conf, ano)
-                if valores: # TODO: Ao invés de verificar somente se existem valores, verificar também se o cliente está ativo
+                if valores and cliente_ativo:
                     valores.reverse()
                     for valor in valores:
                         if valor[6] == int(mes) and valor[7] == int(ano) and valor[8] == 1:

@@ -1,3 +1,13 @@
+from aws_parameters import get_ssm_parameter
+import json
+import os
+import boto3
+from botocore.exceptions import ClientError
+from google.auth.transport.requests import Request
+from google.auth import identity_pool
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
+
 def get_secret():
     secret_name = "GoogleFederationConfig"
     region_name = "sa-east-1"
@@ -65,6 +75,7 @@ def lista_pastas_subpastas_em_diretorio(folder_id):
 
 def procura_pasta_drive_por_nome(folder_name: str) -> list[dict] | None:
     """
+    .. summary::
     Procura pastas no Google Drive pelo nome fornecido.
 
     Args:
@@ -247,4 +258,61 @@ def procura_subpasta_drive_por_nome(parent_folder_name: str, subfolder_name: str
 
     except Exception as error:
         print(f"Erro ao procurar subpasta no Google Drive: {error}")
+        return None
+
+def listar_arquivos_drive(folder_id):
+    try:
+        driver_service = autenticacao_google_drive()
+        query = f"parents in '{folder_id}' and trashed = false"
+
+        results = driver_service.files().list(q=query, pageSize=80, fields="files(id, name, mimeType, parents, modifiedTime), nextPageToken").execute()
+        arquivos = results.get('files', [])
+
+        return arquivos
+    except Exception as error:
+        print(f"Erro ao procurar arquivos no Google Drive: {error}")
+        return None
+
+def criar_pasta_drive(folder_name, parent_folder_id):
+    try:
+        if not folder_name or not parent_folder_id:
+            raise ValueError("Nome da pasta ou ID do diretório pai não podem estar vazio.")
+        
+        driver_service = autenticacao_google_drive()
+        folder_metadata = {
+            'name': folder_name,
+            'mimeType': 'application/vnd.google-apps.folder',
+            'parents': [parent_folder_id]
+        }
+
+        query = f"name = '{folder_name}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
+
+        results = driver_service.files().list(q=query, pageSize=80, fields="files(id, name)").execute()
+        items = results.get('files', [])
+
+        if items:
+            raise ValueError("Pasta ja existe! Por favor escolha outro nome.")
+
+        created_folder = driver_service.files().create(body=folder_metadata, fields='id').execute()
+        return created_folder
+    except Exception as error:
+        print(f"Erro ao criar pasta no Google Drive: {error}")
+        return None
+
+def upload_arquivo_drive(file_path, folder_id):
+    try:
+        if not file_path or not folder_id:
+            raise ValueError("Caminho do arquivo ou ID da pasta não podem estar vazio.")
+
+        driver_service = autenticacao_google_drive()
+        file_metadata = {
+            'name': os.path.basename(file_path),
+            'parents': [folder_id]
+        }
+
+        media = MediaFileUpload(file_path, resumable=True)
+        created_file = driver_service.files().create(body=file_metadata, media_body=media, fields='id').execute()
+        return created_file
+    except Exception as error:
+        print(f"Erro ao criar arquivo no Google Drive: {error}")
         return None
