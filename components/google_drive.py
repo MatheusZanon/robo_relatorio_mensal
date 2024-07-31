@@ -55,14 +55,22 @@ def autenticacao_google_drive():
     except Exception as error:
         print(error)
 
-driver_service = autenticacao_google_drive()
 
-def lista_pastas_em_diretorio(folder_id):
+def lista_pastas_em_diretorio(driver_service, folder_id):
     try:
-        query = f"'{folder_id}' in parents and trashed=false"
+        query = f"'{folder_id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false"
         results = driver_service.files().list(q=query, pageSize=80, fields="files(id, name)").execute()
         items = results.get('files', [])
         return items
+    except Exception as error:
+        print(error)
+
+def pegar_arquivo(files: list[dict[str, any]], nome_arquivo: str):
+    try:
+        for file in files:
+            if file['name'] == nome_arquivo:
+                return file
+        return None
     except Exception as error:
         print(error)
 
@@ -73,7 +81,7 @@ def lista_pastas_subpastas_em_diretorio(folder_id):
     except Exception as error:
         print(error)
 
-def procura_pasta_drive_por_nome(folder_name: str) -> list[dict] | None:
+def procura_pasta_drive_por_nome(driver_service, folder_name: str) -> list[dict] | None:
     """
     .. summary::
     Procura pastas no Google Drive pelo nome fornecido.
@@ -136,7 +144,7 @@ def procura_pasta_drive_por_nome(folder_name: str) -> list[dict] | None:
         print(f"Erro ao procurar pasta no Google Drive: {error}")
         return None
 
-def procura_subpasta_drive_por_nome(parent_folder_name: str, subfolder_name: str, intermediate_folders: list[str] = None, recursive=False) -> list[dict] | None:
+def procura_subpasta_drive_por_nome(driver_service, parent_folder_name: str, subfolder_name: str, intermediate_folders: list[str] = None, recursive=False) -> list[dict] | None:
     """
     Procura uma subpasta no Google Drive pelo nome da pasta pai e nome da subpasta.
     
@@ -260,7 +268,7 @@ def procura_subpasta_drive_por_nome(parent_folder_name: str, subfolder_name: str
         print(f"Erro ao procurar subpasta no Google Drive: {error}")
         return None
 
-def listar_arquivos_drive(folder_id):
+def listar_arquivos_drive(driver_service, folder_id):
     try:
         driver_service = autenticacao_google_drive()
         query = f"parents in '{folder_id}' and trashed = false"
@@ -273,7 +281,34 @@ def listar_arquivos_drive(folder_id):
         print(f"Erro ao procurar arquivos no Google Drive: {error}")
         return None
 
-def criar_pasta_drive(folder_name, parent_folder_id):
+def encontrar_pasta_por_nome(driver_service, folder_id, nome_pasta_desejada):
+    try:
+        # Listar todos os arquivos e pastas no diretório atual
+        arquivos = listar_arquivos_drive(driver_service, folder_id)
+
+        if arquivos is None:
+            return None
+
+        # Verificar se há uma pasta com o nome desejado
+        for arquivo in arquivos:
+            if arquivo['mimeType'] == 'application/vnd.google-apps.folder' and arquivo['name'] == nome_pasta_desejada:
+                return arquivo  # Retornar a pasta encontrada
+        
+        return None
+
+        # Se não encontrado, repetir o processo para todas as subpastas || RECURSIVO
+        # for arquivo in arquivos:
+        #    if arquivo['mimeType'] == 'application/vnd.google-apps.folder':
+        #        subpasta = encontrar_pasta_por_nome(arquivo['id'], nome_pasta_desejada)
+        #        if subpasta:
+        #            return subpasta  # Retornar a subpasta encontrada
+
+        return None  # Se nenhuma pasta for encontrada
+    except Exception as error:
+        print(f"Erro ao procurar pasta no Google Drive: {error}")
+        return None
+
+def criar_pasta_drive(driver_service, folder_name, parent_folder_id):
     try:
         if not folder_name or not parent_folder_id:
             raise ValueError("Nome da pasta ou ID do diretório pai não podem estar vazio.")
@@ -299,7 +334,7 @@ def criar_pasta_drive(folder_name, parent_folder_id):
         print(f"Erro ao criar pasta no Google Drive: {error}")
         return None
 
-def upload_arquivo_drive(file_path, folder_id):
+def upload_arquivo_drive(driver_service, file_path, folder_id):
     try:
         if not file_path or not folder_id:
             raise ValueError("Caminho do arquivo ou ID da pasta não podem estar vazio.")

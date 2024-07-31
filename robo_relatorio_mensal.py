@@ -3,13 +3,12 @@ from components.importacao_diretorios_windows import listagem_arquivos, procura_
 from components.importacao_caixa_dialogo import DialogBox
 from components.checar_ativacao_google_drive import checa_google_drive
 from components.configuracao_db import configura_db, ler_sql
-from components.importacao_automacao_excel_openpyxl import carrega_excel
+from components.importacao_automacao_excel_openpyxl import carrega_excel, converter_excel_para_pdf
 from components.procura_cliente import procura_cliente, procura_clientes_por_regiao
 from components.procura_valores import procura_valores, procura_todos_valores_ano
 from components.enviar_emails import enviar_email_com_anexos
-from components.google_drive import procura_subpasta_drive_por_nome, lista_pastas_em_diretorio, procura_pasta_drive_por_nome
+from components.google_drive import encontrar_pasta_por_nome, lista_pastas_em_diretorio, pegar_arquivo, autenticacao_google_drive, upload_arquivo_drive
 import mysql.connector
-import tkinter as tk
 from pathlib import Path
 from openpyxl.styles import Border, Side, NamedStyle
 from shutil import copy
@@ -112,9 +111,8 @@ def envia_email(dir_dentistas_norte_destino):
     except Exception as error:
         print(error)
 
-def relatorio_economia_geral_mensal(mes, ano, particao, lista_dir_clientes, dir_economia_mensal_modelo):
+def relatorio_economia_geral_mensal(mes, ano, particao, lista_dir_clientes, dir_economia_mensal_modelo, driver_service):
     try:
-        pythoncom.CoInitialize()
         workbook_emails, sheet_emails, style_moeda_emails = carrega_excel(f"{particao}:\\Meu Drive\\Arquivos_Automacao\\emails para envio relatorio human.xlsx") # TODO: PRECISA DOS EMAILS DE CADA CLIENTE
         ceo_email = os.getenv('CEO_EMAIL')
         corpo_email = os.getenv('CORPO_EMAIL_02')
@@ -138,22 +136,20 @@ def relatorio_economia_geral_mensal(mes, ano, particao, lista_dir_clientes, dir_
                             relatorio_enviado = False
 
                     if relatorio_enviado == False:
-                        pasta_cliente = procura_pasta_drive_por_nome(cliente_nome)
-                        if pasta_cliente != None:
-                            pasta_cliente = pasta_cliente[0]
+                        pasta_cliente = pegar_arquivo(lista_dir_clientes, cliente_nome.replace("S/S", "S S"))
                         
                         if pasta_cliente:
-                            pasta_economia_mensal = procura_subpasta_drive_por_nome(cliente_nome, ano, ["Economia Mensal"])
-                            if pasta_economia_mensal != None:
-                                pasta_economia_mensal = pasta_economia_mensal[0]
+                            # pasta_regioes = listar_arquivos_drive(pasta_cliente)
+                            pasta_economia_mensal = encontrar_pasta_por_nome(driver_service, pasta_cliente['id'], "Economia Mensal")
                             
                             caminho_arquivo_excel = f"/tmp/Economia_Mensal_{cliente_nome}_{ano}.xlsx"
-                            
                             copy(dir_economia_mensal_modelo, caminho_arquivo_excel)
                             sleep(0.5)
+
                             workbook_economia, sheet_economia, style_moeda_economia = carrega_excel(caminho_arquivo_excel)
                             sheet_economia[f'C1'] = f"Relatorio demonstrativo de economia previdenciaria {ano}"
                             sheet_economia[f'C2'] = cliente_nome
+
                             for indice, valor in enumerate(valores):
                                 sheet_economia['C4'].style = style_moeda_economia
                                 sheet_economia['A4'].border = Border(top=Side(style='thin'), bottom=Side(style='thin'), left=Side(style='thin'))
@@ -164,34 +160,35 @@ def relatorio_economia_geral_mensal(mes, ano, particao, lista_dir_clientes, dir_
                                 mes_valor = calendar.month_name[int(valor[6])].capitalize()
                                 sheet_economia['A4'] = f"{mes_valor}/{ano}"
                                 sheet_economia['D4'] = valor[3]
+
                                 if not indice == len(valores) - 1:
                                     sheet_economia.insert_rows(4)
+
                             for row in sheet_economia.iter_rows(min_row=1, min_col=1, max_col=5):
                                 if row[0].value == "Total economia/ano":
                                     sheet_economia[f'D{row[0].row}'] = f"=SUM(D4:D{row[0].row - 1})"
+
                             workbook_economia.save(caminho_arquivo_excel)
                             workbook_economia.close()
-                            try:
-                                excel = win32.gencache.EnsureDispatch('Excel.Application')
-                                excel.Visible = True
-                                wb = excel.Workbooks.Open(caminho_arquivo_excel)
-                                ws = wb.Worksheets[f"Página1"]
-                                sleep(3)
-                                ws.ExportAsFixedFormat(0, f"{pasta_economia_mensal}" + f"\\Economia_Mensal_{cliente_nome}_{ano}")
-                                wb.Close()
-                                excel.Quit()
-                                print("Relatório Gerado!")
-                            except Exception as error:
-                                print(error)
+
+                            caminho_arquivo_pdf = f"/tmp/Economia_Mensal_{cliente_nome}_{ano}.pdf"
+                            converter_excel_para_pdf(caminho_arquivo_excel, caminho_arquivo_pdf)
                             sleep(0.5)
-                            caminho_arquivo_pdf = [f"{pasta_economia_mensal}\\Economia_Mensal_{cliente_nome}_{ano}.pdf"]
-                            sleep(0.5)
+
+                            upload_arquivo_drive(driver_service, caminho_arquivo_pdf, pasta_economia_mensal['id'])
+                            upload_arquivo_drive(driver_service, caminho_arquivo_excel, pasta_economia_mensal['id'])
                             enviar_email_com_anexos(cliente_emails, f"Relatório demonstrativo de economia previdenciaria {ano}", corpo_email, caminho_arquivo_pdf)
+
                             query_atualiza_relatorios = ler_sql("sql/atualiza_relatorios_cliente.sql")
                             values_relatorio = (cliente_id, mes, ano)
                             with mysql.connector.connect(**db_conf) as conn, conn.cursor() as cursor:
                                 cursor.execute(query_atualiza_relatorios, values_relatorio)
                                 conn.commit()
+                            
+                            if os.path.exists(caminho_arquivo_excel):
+                                os.remove(caminho_arquivo_excel)
+                            if os.path.exists(caminho_arquivo_pdf):
+                                os.remove(caminho_arquivo_pdf)
                         else:
                             print("Pasta do cliente não encontrada")
                     else:
@@ -205,8 +202,6 @@ def relatorio_economia_geral_mensal(mes, ano, particao, lista_dir_clientes, dir_
         workbook_emails.close()
     except Exception as error:
         print(error)
-    finally:
-        pythoncom.CoUninitialize()
 
 
 def lambda_handler(event, context):
@@ -218,14 +213,17 @@ def lambda_handler(event, context):
     particao = body['particao']
     rotina = body['rotina']
 
-    # ========================PARAMETROS INICIAS==============================
+    # ========================INICIA O SERVIÇO DO GOOGLE DRIVE==================
+    driver_service = autenticacao_google_drive()
+
+    # ========================PARAMETROS INICIAS================================
     clientes_itaperuna_id = os.getenv('CLIENTES_ITAPERUNA_FOLDER_ID')
     clientes_manaus_id = os.getenv('CLIENTES_MANAUS_FOLDER_ID')
     dentista_norte_id = os.get_env('DENTISTAS_NORTE_FOLDER_ID') # TODO: TEM QUE SER CRIADO
 
-    arquivos_itaperuna = lista_pastas_em_diretorio(clientes_itaperuna_id)
-    arquivos_manaus = lista_pastas_em_diretorio(clientes_manaus_id)
-    arquivos_dentistas_norte = lista_pastas_em_diretorio(dentista_norte_id)
+    arquivos_itaperuna = lista_pastas_em_diretorio(driver_service, clientes_itaperuna_id)
+    arquivos_manaus = lista_pastas_em_diretorio(driver_service, clientes_manaus_id)
+    arquivos_dentistas_norte = lista_pastas_em_diretorio(driver_service, dentista_norte_id)
 
     lista_dir_clientes = arquivos_itaperuna + arquivos_manaus
 
@@ -235,18 +233,18 @@ def lambda_handler(event, context):
     mes_nome = calendar.month_name[int(mes)].capitalize()
     sucesso = False
 
-    # ========================LÓGICA DE EXECUÇÃO DO ROBÔ===========================
+    # ========================LÓGICA DE EXECUÇÃO DO ROBÔ========================
     if rotina == "1. Gerar Relatorio Dentista do Norte":
         gera_relatorio_dentistas_norte(mes, mes_nome, ano, dir_dentistas_norte_modelo, dir_dentistas_norte_destino)
         envia_email(dir_dentistas_norte_destino)
-        relatorio_economia_geral_mensal(mes, ano, particao, lista_dir_clientes, dir_economia_mensal_modelo)
+        relatorio_economia_geral_mensal(mes, ano, particao, lista_dir_clientes, dir_economia_mensal_modelo, driver_service)
         sucesso = True
     elif rotina == "2. Enviar Email":
         envia_email(dir_dentistas_norte_destino)
-        relatorio_economia_geral_mensal(mes, ano, particao, lista_dir_clientes, dir_economia_mensal_modelo)
+        relatorio_economia_geral_mensal(mes, ano, particao, lista_dir_clientes, dir_economia_mensal_modelo, driver_service)
         sucesso = True
     elif rotina == "3. Relatorio Economia Geral Mensal":
-        relatorio_economia_geral_mensal(mes, ano, particao, lista_dir_clientes, dir_economia_mensal_modelo)
+        relatorio_economia_geral_mensal(mes, ano, particao, lista_dir_clientes, dir_economia_mensal_modelo, driver_service)
         sucesso = True
     else:
         print("Nenhuma rotina selecionada, encerrando o robô...")
