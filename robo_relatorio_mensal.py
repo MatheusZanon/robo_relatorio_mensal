@@ -7,7 +7,7 @@ from components.importacao_automacao_excel_openpyxl import carrega_excel, conver
 from components.procura_cliente import procura_cliente, procura_clientes_por_regiao
 from components.procura_valores import procura_valores, procura_todos_valores_ano
 from components.enviar_emails import enviar_email_com_anexos
-from components.google_drive import encontrar_pasta_por_nome, lista_pastas_em_diretorio, pegar_arquivo, autenticacao_google_drive, upload_arquivo_drive
+from components.google_drive import encontrar_pasta_por_nome, lista_pastas_em_diretorio, pegar_arquivo, autenticacao_google_drive, upload_arquivo_drive, criar_pasta_drive
 import mysql.connector
 from pathlib import Path
 from openpyxl.styles import Border, Side, NamedStyle
@@ -32,9 +32,8 @@ db_conf = configura_db()
 checa_google_drive()
 
 # ==================== MÉTODOS DE CADA ETAPA DO PROCESSO========================
-def gera_relatorio_dentistas_norte(mes, mes_nome, ano, dir_dentistas_norte_modelo, dir_dentistas_norte_destino):
+def gera_relatorio_dentistas_norte(mes, mes_nome, ano, dir_dentistas_norte_modelo, dentistas_norte_id, driver_service):
     try:
-        pythoncom.CoInitialize()
         dentistas_norte = procura_clientes_por_regiao("Manaus", db_conf)
         dentistas_norte.reverse()
         linha = 3
@@ -42,12 +41,10 @@ def gera_relatorio_dentistas_norte(mes, mes_nome, ano, dir_dentistas_norte_model
         total = 0
 
         if dentistas_norte:
-            dir_dentistas_norte_destino.mkdir(parents=True, exist_ok=True)
-            nome_arquivo = f"Dentistas_Norte_{mes}_{ano}.xlsx"
-            caminho_relatorio = f"{dir_dentistas_norte_destino}\\{nome_arquivo}"
-            copy(dir_dentistas_norte_modelo, dir_dentistas_norte_destino / nome_arquivo)
+            caminho_relatorio = f"/tmp/Dentistas_Norte_{mes}_{ano}.xlsx"
+            copy(dir_dentistas_norte_modelo, caminho_relatorio)
             try:
-                workbook, sheet, style_moeda = carrega_excel(f"{dir_dentistas_norte_destino}\\{nome_arquivo}")
+                workbook, sheet, style_moeda = carrega_excel(caminho_relatorio)
                 sheet.title = f"Dentistas_Norte_{mes}_{ano}"
                 sheet['C2'] = mes_nome
                 for cliente in dentistas_norte:
@@ -72,26 +69,43 @@ def gera_relatorio_dentistas_norte(mes, mes_nome, ano, dir_dentistas_norte_model
                 sheet[f'C{linha}'].border = Border(top=Side(style='thin'), bottom=Side(style='thin'), left=Side(style='thin'), right=Side(style='thin'))
                 sheet[f'B{linha}'] = "Valor total da Economia Pós pagamento a Human"
                 sheet[f'C{linha}'] = total
+
                 workbook.save(caminho_relatorio)
                 workbook.close()
-                try:
-                    excel = win32.gencache.EnsureDispatch('Excel.Application')
-                    excel.Visible = True
-                    wb = excel.Workbooks.Open(caminho_relatorio)
-                    ws = wb.Worksheets[f"Dentistas_Norte_{mes}_{ano}"]
-                    sleep(3)
-                    ws.ExportAsFixedFormat(0, str(dir_dentistas_norte_destino) + f"\\Dentistas_Norte_{mes}_{ano}")
-                    wb.Close()
-                    excel.Quit()
-                    print("Relatório Gerado!")
-                except Exception as error:
-                    print(error)
+
+                caminho_relatorio_pdf = f"/tmp/Dentistas_Norte_{mes}_{ano}.pdf"
+                converter_excel_para_pdf(caminho_relatorio, caminho_relatorio_pdf)
+
+                sleep(0.5)
+
+                pastas_dentistas_norte = lista_pastas_em_diretorio(driver_service, dentistas_norte_id)
+                pasta_destino = None
+
+                if pastas_dentistas_norte:
+                    for pasta in pastas_dentistas_norte:
+                        if pasta['name'] == f"{ano}-{mes}":
+                            pasta_destino = pasta
+                            break
+
+                if not pasta_destino:
+                    pasta_destino = criar_pasta_drive(driver_service, dentistas_norte_id, f"{ano}-{mes}")
+                
+                sleep(0.5)
+
+                if pasta_destino:
+                    upload_arquivo_drive(driver_service, caminho_relatorio, pasta_destino['id'])
+                    upload_arquivo_drive(driver_service, caminho_relatorio_pdf, pasta_destino['id'])
+                else:
+                    print("Pasta não encontrada")
+                
+                if os.path.exists(caminho_relatorio):
+                    os.remove(caminho_relatorio)
+                if os.path.exists(caminho_relatorio_pdf):
+                    os.remove(caminho_relatorio_pdf)
             except Exception as error:
                 print(error)
     except Exception as error:
         print(error)
-    finally:
-        pythoncom.CoUninitialize()
 
 def envia_email(dir_dentistas_norte_destino):
     try:
@@ -223,7 +237,6 @@ def lambda_handler(event, context):
 
     arquivos_itaperuna = lista_pastas_em_diretorio(driver_service, clientes_itaperuna_id)
     arquivos_manaus = lista_pastas_em_diretorio(driver_service, clientes_manaus_id)
-    arquivos_dentistas_norte = lista_pastas_em_diretorio(driver_service, dentista_norte_id)
 
     lista_dir_clientes = arquivos_itaperuna + arquivos_manaus
 
@@ -235,7 +248,7 @@ def lambda_handler(event, context):
 
     # ========================LÓGICA DE EXECUÇÃO DO ROBÔ========================
     if rotina == "1. Gerar Relatorio Dentista do Norte":
-        gera_relatorio_dentistas_norte(mes, mes_nome, ano, dir_dentistas_norte_modelo, dir_dentistas_norte_destino)
+        gera_relatorio_dentistas_norte(mes, mes_nome, ano, dir_dentistas_norte_modelo, dentista_norte_id, driver_service)
         envia_email(dir_dentistas_norte_destino)
         relatorio_economia_geral_mensal(mes, ano, particao, lista_dir_clientes, dir_economia_mensal_modelo, driver_service)
         sucesso = True
