@@ -36,7 +36,7 @@ checa_google_drive()
 def gera_relatorio_dentistas_norte(mes, mes_nome, ano, dir_dentistas_norte_modelo, dir_dentistas_norte_destino):
     try:
         pythoncom.CoInitialize()
-        dentistas_norte = procura_clientes_por_regiao("Manaus", db_conf)
+        dentistas_norte = procura_clientes_por_regiao("Ma", db_conf)
         dentistas_norte.reverse()
         linha = 3
         indice = 1
@@ -44,12 +44,12 @@ def gera_relatorio_dentistas_norte(mes, mes_nome, ano, dir_dentistas_norte_model
 
         if dentistas_norte:
             dir_dentistas_norte_destino.mkdir(parents=True, exist_ok=True)
-            nome_arquivo = f"Dentistas_Norte_{mes}_{ano}.xlsx"
+            nome_arquivo = f"grupo_{mes}_{ano}.xlsx"
             caminho_relatorio = f"{dir_dentistas_norte_destino}\\{nome_arquivo}"
             copy(dir_dentistas_norte_modelo, dir_dentistas_norte_destino / nome_arquivo)
             try:
                 workbook, sheet, style_moeda = carrega_excel(f"{dir_dentistas_norte_destino}\\{nome_arquivo}")
-                sheet.title = f"Dentistas_Norte_{mes}_{ano}"
+                sheet.title = f"grupo_{mes}_{ano}"
                 sheet['C2'] = mes_nome
                 for cliente in dentistas_norte:
                     cliente_id = cliente[0]
@@ -71,7 +71,7 @@ def gera_relatorio_dentistas_norte(mes, mes_nome, ano, dir_dentistas_norte_model
                 sheet[f'A{linha}'].border = Border(top=Side(style='thin'), bottom=Side(style='thin'), left=Side(style='thin'), right=Side(style='thin'))
                 sheet[f'B{linha}'].border = Border(top=Side(style='thin'), bottom=Side(style='thin'), left=Side(style='thin'), right=Side(style='thin'))
                 sheet[f'C{linha}'].border = Border(top=Side(style='thin'), bottom=Side(style='thin'), left=Side(style='thin'), right=Side(style='thin'))
-                sheet[f'B{linha}'] = "Valor total da Economia Pós pagamento a Human"
+                sheet[f'B{linha}'] = "Valor total da Economia Pós pagamento"
                 sheet[f'C{linha}'] = total
                 workbook.save(caminho_relatorio)
                 workbook.close()
@@ -79,9 +79,9 @@ def gera_relatorio_dentistas_norte(mes, mes_nome, ano, dir_dentistas_norte_model
                     excel = win32.gencache.EnsureDispatch('Excel.Application')
                     excel.Visible = True
                     wb = excel.Workbooks.Open(caminho_relatorio)
-                    ws = wb.Worksheets[f"Dentistas_Norte_{mes}_{ano}"]
+                    ws = wb.Worksheets[f"grupo_{mes}_{ano}"]
                     sleep(3)
-                    ws.ExportAsFixedFormat(0, str(dir_dentistas_norte_destino) + f"\\Dentistas_Norte_{mes}_{ano}")
+                    ws.ExportAsFixedFormat(0, str(dir_dentistas_norte_destino) + f"\\grupo_{mes}_{ano}")
                     wb.Close()
                     excel.Quit()
                     print("Relatório Gerado!")
@@ -106,7 +106,7 @@ def envia_email(dir_dentistas_norte_destino):
         for arquivo in arquivos:
             if arquivo.__contains__(".pdf"):
                 anexos.append(arquivo)
-                enviar_email_com_anexos(emails_formatado, "Relatório de Redução de Custos Trabalhistas Mensal - Grupo Dentistas do Norte", corpo_email, anexos)
+                enviar_email_com_anexos(emails_formatado, "Relatório de Redução de Custos Trabalhistas Mensal", corpo_email, anexos)
         if anexos == []:
             print("Relatório não foi encontrado")
     except Exception as error:
@@ -115,7 +115,7 @@ def envia_email(dir_dentistas_norte_destino):
 def relatorio_economia_geral_mensal(mes, ano, particao, lista_dir_clientes, dir_economia_mensal_modelo):
     try:
         pythoncom.CoInitialize()
-        workbook_emails, sheet_emails, style_moeda_emails = carrega_excel(f"{particao}:\\Meu Drive\\Arquivos_Automacao\\emails para envio relatorio human.xlsx")
+        workbook_emails, sheet_emails, style_moeda_emails = carrega_excel(f"{particao}:\\Meu Drive\\restodocaminho\\emails para envio relatorio.xlsx")
         ceo_email = os.getenv('CEO_EMAIL')
         corpo_email = os.getenv('CORPO_EMAIL_02')
         cliente_emails = [ceo_email]
@@ -220,17 +220,17 @@ class execute(Resource):
     rotina = json['rotina']
 
     # ========================PARAMETROS INICIAS==============================
-    dir_clientes_itaperuna = f"{particao}:\\Meu Drive\\Cobranca_Clientes_terceirizacao\\Clientes Itaperuna"
-    dir_clientes_manaus = f"{particao}:\\Meu Drive\\Cobranca_Clientes_terceirizacao\\Clientes Manaus"
+    dir_clientes_itaperuna = f"{particao}:\\Meu Drive\\restodocaminho\\Clientes Itaperuna"
+    dir_clientes_manaus = f"{particao}:\\Meu Drive\\restodocaminho\\Clientes Ma"
     lista_dir_clientes = [dir_clientes_itaperuna, dir_clientes_manaus]
-    dir_dentistas_norte_modelo = Path(f"{particao}:\\Meu Drive\\Arquivos_Automacao\\Dentistas_Norte_Modelo_00_0000_python.xlsx")
-    dir_dentistas_norte_destino = Path(f"{particao}:\\Meu Drive\\Relatorio_Dentista_do_Norte\\{mes}-{ano}")
-    dir_economia_mensal_modelo = Path(f"{particao}:\\Meu Drive\\Arquivos_Automacao\\modelo relatorio demonstrativo economia previdencia.xlsx")
+    dir_dentistas_norte_modelo = Path(f"{particao}:\\Meu Drive\\restodocaminho\\Modelo_00_0000_python.xlsx")
+    dir_dentistas_norte_destino = Path(f"{particao}:\\Meu Drive\\Relatorio\\{mes}-{ano}")
+    dir_economia_mensal_modelo = Path(f"{particao}:\\Meu Drive\\restodocaminho\\modelo relatorio demonstrativo economia previdencia.xlsx")
     mes_nome = calendar.month_name[int(mes)].capitalize()
     sucesso = False
 
     # ========================LÓGICA DE EXECUÇÃO DO ROBÔ===========================
-    if rotina == "1. Gerar Relatorio Dentista do Norte":
+    if rotina == "1. Gerar Relatorio":
         gera_relatorio_dentistas_norte(mes, mes_nome, ano, dir_dentistas_norte_modelo, dir_dentistas_norte_destino)
         envia_email(dir_dentistas_norte_destino)
         relatorio_economia_geral_mensal(mes, ano, particao, lista_dir_clientes, dir_economia_mensal_modelo)
