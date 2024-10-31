@@ -34,14 +34,14 @@ checa_google_drive()
 # ==================== MÉTODOS DE CADA ETAPA DO PROCESSO========================
 def gera_relatorio_dentistas_norte(mes, mes_nome, ano, dir_dentistas_norte_modelo, dentistas_norte_id, driver_service):
     try:
-        dentistas_norte = procura_clientes_por_regiao("Manaus", db_conf)
+        dentistas_norte = procura_clientes_por_regiao("Ma", db_conf)
         dentistas_norte.reverse()
         linha = 3
         indice = 1
         total = 0
 
         if dentistas_norte:
-            caminho_relatorio = f"/tmp/Dentistas_Norte_{mes}_{ano}.xlsx"
+            caminho_relatorio = f"/tmp/grupo_{mes}_{ano}.xlsx"
             copy(dir_dentistas_norte_modelo, caminho_relatorio)
             try:
                 workbook, sheet, style_moeda = carrega_excel(caminho_relatorio)
@@ -67,13 +67,13 @@ def gera_relatorio_dentistas_norte(mes, mes_nome, ano, dir_dentistas_norte_model
                 sheet[f'A{linha}'].border = Border(top=Side(style='thin'), bottom=Side(style='thin'), left=Side(style='thin'), right=Side(style='thin'))
                 sheet[f'B{linha}'].border = Border(top=Side(style='thin'), bottom=Side(style='thin'), left=Side(style='thin'), right=Side(style='thin'))
                 sheet[f'C{linha}'].border = Border(top=Side(style='thin'), bottom=Side(style='thin'), left=Side(style='thin'), right=Side(style='thin'))
-                sheet[f'B{linha}'] = "Valor total da Economia Pós pagamento a Human"
+                sheet[f'B{linha}'] = "Valor total da Economia Pós pagamento"
                 sheet[f'C{linha}'] = total
 
                 workbook.save(caminho_relatorio)
                 workbook.close()
 
-                caminho_relatorio_pdf = f"/tmp/Dentistas_Norte_{mes}_{ano}.pdf"
+                caminho_relatorio_pdf = f"/tmp/grupo_{mes}_{ano}.pdf"
                 converter_excel_para_pdf(caminho_relatorio, caminho_relatorio_pdf)
 
                 sleep(0.5)
@@ -119,7 +119,7 @@ def envia_email(dir_dentistas_norte_destino):
         for arquivo in arquivos:
             if arquivo.__contains__(".pdf"):
                 anexos.append(arquivo)
-                enviar_email_com_anexos(emails_formatado, "Relatório de Redução de Custos Trabalhistas Mensal - Grupo Dentistas do Norte", corpo_email, anexos)
+                enviar_email_com_anexos(emails_formatado, "Relatório de Redução de Custos Trabalhistas", corpo_email, anexos)
         if anexos == []:
             print("Relatório não foi encontrado")
     except Exception as error:
@@ -127,7 +127,7 @@ def envia_email(dir_dentistas_norte_destino):
 
 def relatorio_economia_geral_mensal(mes, ano, particao, lista_dir_clientes, dir_economia_mensal_modelo, driver_service):
     try:
-        workbook_emails, sheet_emails, style_moeda_emails = carrega_excel(f"{particao}:\\Meu Drive\\Arquivos_Automacao\\emails para envio relatorio human.xlsx") # TODO: PRECISA DOS EMAILS DE CADA CLIENTE
+        workbook_emails, sheet_emails, style_moeda_emails = carrega_excel(f"{particao}:\\Meu Drive\\restodocaminho\\emails para envio de relatorio.xlsx") # TODO: PRECISA DOS EMAILS DE CADA CLIENTE
         ceo_email = os.getenv('CEO_EMAIL')
         corpo_email = os.getenv('CORPO_EMAIL_02')
         cliente_emails = [ceo_email]
@@ -240,8 +240,8 @@ def lambda_handler(event, context):
 
     lista_dir_clientes = arquivos_itaperuna + arquivos_manaus
 
-    dir_dentistas_norte_destino = Path(f"{particao}:\\Meu Drive\\Relatorio_Dentista_do_Norte\\{mes}-{ano}") # TODO: TEM QUE DESCOBRIR COMO CHEGAR NESSE CAMINHO OU CRIAR CASO NÃO EXISTA
-    dir_dentistas_norte_modelo = Path(f"templates\\dentistas_norte_modelo_00_0000_python.xlsx")
+    dir_dentistas_norte_destino = Path(f"{particao}:\\Meu Drive\\Relatorio\\{mes}-{ano}") # TODO: TEM QUE DESCOBRIR COMO CHEGAR NESSE CAMINHO OU CRIAR CASO NÃO EXISTA
+    dir_dentistas_norte_modelo = Path(f"templates\\modelo_00_0000_python.xlsx")
     dir_economia_mensal_modelo = Path(f"templates\\modelo_relatorio_demonstrativo_economia_previdencia.xlsx")
     mes_nome = calendar.month_name[int(mes)].capitalize()
     sucesso = False
